@@ -1,5 +1,5 @@
 [package]
-name = "copy_from_dropbox_camera"
+name = "copy_camerarolls"
 version = "0.1.0"
 edition = "2021"
 
