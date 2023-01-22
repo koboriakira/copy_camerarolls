@@ -1,4 +1,4 @@
-# copy_from_dropbox_camera
+# copy\_camerarolls
 
 ## インストール
 
