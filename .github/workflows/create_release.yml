@@ -5,12 +5,8 @@ on:
     tags:
       - 'v*'
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   build:
-
     strategy:
       matrix:
         target:
@@ -28,32 +24,29 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Setup code
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v2
+
+      - uses: ./.github/actions/cache_cargo
+
+      - name: build
+        run: cargo build
+        working-directory: server
 
       - name: Install musl tools
         if : matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt install -qq -y musl-tools --no-install-recommends
-      
-      - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
 
       - name: test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+        run: |
+          cargo test
 
-      - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target=${{ matrix.target }}
+      - name: build
+        run: |
+          rustup target add ${{ matrix.os }}
+          cargo build --release --target=${{ matrix.target }}
+
+      - uses: ./.github/actions/cache_cargo
 
       - name: Package for linux-musl
         if: matrix.target == 'aarch64-unknown-linux-gnu'
@@ -108,12 +101,15 @@ jobs:
       - uses: actions/download-artifact@v1
         with:
           name: create-release
+
       - id: upload-url
         run: |
           echo "::set-output name=url::$(cat create-release/release_upload_url.txt)"
+
       - uses: actions/download-artifact@v1
         with:
           name: build-${{ matrix.target }}
+
       - uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
