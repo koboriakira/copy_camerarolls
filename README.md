@@ -1,31 +1,43 @@
-# copy\_camerarolls
+# copy_camerarolls
 
-## インストール
+Apple Photos → NAS 増分バックアップ。osxphotos で Photos ライブラリを読み取り、
+YYYY/MM/DD 構造で NAS にコピーする。
 
-```shell
-wget https://github.com/koboriakira/copy_camerarolls/releases/download/v0.0.4/copy_camerarolls-x86_64-apple-darwin.zip -O - | sudo tar xvf - -C /usr/local/bin/
-sudo chmod 775 /usr/local/bin/copy_camerarolls
+## 前提
+
+- macOS + Apple Photos
+- ターミナルに **Full Disk Access** が付与されていること（Photos.sqlite の読み取りに必要）
+- NAS がマウント済み（デフォルト: `/Volumes/photo`）
+
+## セットアップ
+
+```bash
+pip install -r requirements.txt
 ```
 
 ## 使い方
 
-```shell
-copy_camerarolls {コピー元のディレクトリ} {コピー先のディレクトリ}
+```bash
+# 通常実行（/Volumes/photo にバックアップ）
+python3 backup.py
+
+# 別のパスに出力
+python3 backup.py --dest /Volumes/other-nas
+
+# テスト（コピーせずに計画だけ表示）
+python3 backup.py --dry-run
+
+# 10枚だけ試す
+python3 backup.py --dry-run --limit 10
+
+# 状態をリセットして全件再処理
+python3 backup.py --reset-state
 ```
 
-```shell
-cargo run {コピー元のディレクトリ} {コピー先のディレクトリ}
-```
+## 仕組み
 
-だいたいこれで実行してる。
-
-```shell
-copy_camerarolls ~/Downloads /Volume/photo
-```
-
-## ビルド
-
-```shell
-cargo build --release --target=x86_64-apple-darwin 
-zip --junk-paths copy_camerarolls-x86_64-apple-darwin target/x86_64-apple-darwin/release/copy_camerarolls
-```
+- osxphotos で Photos ライブラリの全写真を列挙
+- 各写真の撮影日から `YYYY/MM/DD/` にコピー
+- Live Photo の動画ペア（.MOV）も同じディレクトリにコピー
+- UUID ベースの状態ファイル（`.backup_state.json`）で増分管理
+- iCloud のみの写真はスキップ（ローカルにある写真のみ対象）
