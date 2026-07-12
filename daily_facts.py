@@ -39,6 +39,7 @@ HEADING = "## 写真"
 DEFAULT_DATA_LABEL_KEYWORDS = frozenset({"food", "receipt", "document", "recipe"})
 
 SCREENSHOT = "screenshot"
+VIDEO = "video"
 DATA_CANDIDATE = "data_candidate"
 MEMORY_CANDIDATE = "memory_candidate"
 UNCLASSIFIED = "unclassified"
@@ -63,8 +64,12 @@ def classify_record(
 ) -> str:
     """三値分類の決定論ルール（Phase 3 の前置フィルタ）。
 
-    優先順位（issue #2 の記載順）:
+    優先順位（issue #2 の記載順 + issue #8 で video を追加）:
       1. screenshot → screenshot（データ写真 or ノイズ。三値分類の対象外）
+      1.5. video（type == "video"、ismovie=True の独立動画）→ video
+           （issue #8: 動画は LLM 解析対象外のため三値分類の対象外。
+           Live Photo companion 動画は親レコードの type を引き継がず
+           "photo" のままなのでここには来ない）
       2. labels が data_labels と交差 → data_candidate
       3. persons が family_names と交差、または favorite、または
          place が memory_locations に含まれる → memory_candidate
@@ -72,6 +77,9 @@ def classify_record(
     """
     if record.get("type") == SCREENSHOT:
         return SCREENSHOT
+
+    if record.get("type") == VIDEO:
+        return VIDEO
 
     osx = record.get("osxphotos") or {}
 
@@ -105,6 +113,7 @@ def summarize_records(
     place_counts: Counter[str] = Counter()
     person_counts: Counter[str] = Counter()
     screenshot_count = 0
+    video_count = 0
     memory_count = 0
     data_count = 0
     unclassified: list[dict] = []
@@ -126,6 +135,8 @@ def summarize_records(
         )
         if category == SCREENSHOT:
             screenshot_count += 1
+        elif category == VIDEO:
+            video_count += 1
         elif category == MEMORY_CANDIDATE:
             memory_count += 1
         elif category == DATA_CANDIDATE:
@@ -144,6 +155,7 @@ def summarize_records(
         "total": total,
         "screenshot_count": screenshot_count,
         "non_screenshot_count": total - screenshot_count,
+        "video_count": video_count,
         "place_counts": place_counts,
         "person_counts": person_counts,
         "memory_count": memory_count,
@@ -179,6 +191,7 @@ def render_photo_section(
         f"- 撮影: {summary['total']}枚（スクショ除外後 {summary['non_screenshot_count']}枚）",
         f"- 場所: {_format_counts(summary['place_counts'])}",
         f"- 人物: {_format_counts(summary['person_counts'])}",
+        f"- 動画: {summary['video_count']}本（LLM解析対象外）",
         f"- 思い出候補: {summary['memory_count']}枚（人物+場所+お気に入り）",
         f"- データ写真候補: {summary['data_count']}枚（食べ物ラベル）",
         f"- 未分類: {len(summary['unclassified'])}枚（Phase 3 対象）",

@@ -8,6 +8,7 @@ from daily_facts import (
     MEMORY_CANDIDATE,
     SCREENSHOT,
     UNCLASSIFIED,
+    VIDEO,
     build_parser,
     classify_record,
     day_dir,
@@ -117,6 +118,20 @@ def test_classify_unclassified_when_no_rule_matches():
 def test_classify_screenshot_takes_priority_over_other_rules():
     record = make_record(record_type="screenshot", favorite=True, labels=["Food"])
     assert classify_record(record, data_labels=["food"]) == SCREENSHOT
+
+
+def test_classify_video():
+    record = make_record(record_type="video")
+    assert classify_record(record) == VIDEO
+
+
+def test_classify_video_takes_priority_over_other_rules():
+    record = make_record(
+        record_type="video", favorite=True, labels=["Food"], persons=["太郎"]
+    )
+    assert (
+        classify_record(record, family_names=["太郎"], data_labels=["food"]) == VIDEO
+    )
 
 
 def test_classify_data_label_takes_priority_over_memory_rules():
@@ -233,6 +248,59 @@ def test_render_photo_section_empty_records():
     assert "- 撮影: 0枚（スクショ除外後 0枚）" in section.splitlines()
     assert "- 場所: (なし)" in section.splitlines()
     assert "- 人物: (なし)" in section.splitlines()
+
+
+# --- video handling (issue #8) --------------------------------------------------
+
+
+def test_summarize_records_counts_videos_separately_and_excludes_from_unclassified():
+    records = {
+        "VID-1": make_record(uuid="VID-1", record_type="video"),
+        "VID-2": make_record(
+            uuid="VID-2",
+            record_type="video",
+            favorite=True,
+            labels=["Food"],
+            persons=["太郎"],
+        ),
+        "UNC-1": make_record(uuid="UNC-1", place="自宅"),
+    }
+
+    summary = summarize_records(records, family_names=["太郎"], data_labels=["food"])
+
+    assert summary["total"] == 3
+    assert summary["video_count"] == 2
+    assert len(summary["unclassified"]) == 1
+    assert summary["unclassified"][0]["uuid"] == "UNC-1"
+
+
+def test_render_photo_section_includes_video_count_line():
+    records = {
+        "VID-1": make_record(uuid="VID-1", record_type="video"),
+        "VID-2": make_record(uuid="VID-2", record_type="video"),
+        "P-1": make_record(uuid="P-1"),
+    }
+
+    section = render_photo_section(records)
+
+    assert "- 動画: 2本（LLM解析対象外）" in section.splitlines()
+
+
+def test_render_photo_section_videos_are_not_listed_as_unclassified():
+    records = {
+        "VID-1": make_record(
+            uuid="VID-1",
+            nas_filename="clip.mov",
+            original_filename="IMG_9999.MOV",
+            record_type="video",
+        ),
+    }
+
+    section = render_photo_section(records)
+
+    assert "clip.mov" not in section
+    assert "IMG_9999.MOV" not in section
+    assert "- 未分類: 0枚（Phase 3 対象）" in section.splitlines()
 
 
 # --- upsert_section --------------------------------------------------------------
