@@ -45,18 +45,12 @@ def dest_dir_for(base: Path, photo) -> Path:
     return base / f"{d.year}" / f"{d.month:02d}" / f"{d.day:02d}"
 
 
-class ICloudOnlyError(Exception):
-    """写真の実体がローカルになく iCloud にしかない場合に送出する。"""
-
-
 def copy_one(photo, dest_dir: Path, dry_run: bool) -> tuple[int, int]:
     """Copy photo (+ Live Photo video) to dest_dir.
     Returns (files_copied, live_videos_copied)."""
     src = photo.path
     if not src or not Path(src).exists():
-        if dry_run:
-            return 0, 0
-        raise ICloudOnlyError(photo.original_filename or photo.uuid)
+        return 0, 0
 
     dest_dir.mkdir(parents=True, exist_ok=True)
     files, live = 0, 0
@@ -123,14 +117,6 @@ def main():
                 new_uuids.add(photo.uuid)
             else:
                 stats["skipped_icloud"] += 1
-        except ICloudOnlyError as e:
-            if new_uuids:
-                save_state(state_path, copied | new_uuids)
-            print(f"\n中断: iCloud のみの写真が見つかりました（ローカル未ダウンロード）: {e}", file=sys.stderr)
-            print("Photos.app の環境設定 > iCloud で「このMacに写真を保存」に変更し、", file=sys.stderr)
-            print("iCloud からのダウンロードが完了してから再実行してください。", file=sys.stderr)
-            print(f"（ここまでの進捗: {i}/{len(photos)} 件処理、{stats['copied']} 件コピー済み）", file=sys.stderr)
-            sys.exit(1)
         except Exception as e:
             print(f"Error [{photo.original_filename}]: {e}", file=sys.stderr)
             stats["errors"] += 1
@@ -151,6 +137,16 @@ def main():
     print(f"  iCloud のみ:  {stats['skipped_icloud']}")
     print(f"  エラー:       {stats['errors']}")
     print(f"  ライブラリ全体: {len(all_photos)}")
+
+    if stats["skipped_icloud"] > 0:
+        print(
+            f"\n注意: {stats['skipped_icloud']} 件は iCloud のみでローカル未ダウンロードのためスキップしました。",
+            file=sys.stderr,
+        )
+        print(
+            "Photos.app で個別にダウンロードすれば、次回実行時に自動的にバックアップされます。",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":
