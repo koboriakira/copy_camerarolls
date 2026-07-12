@@ -1,0 +1,46 @@
+name: dev-loop notify
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  issues: write
+
+jobs:
+  notify:
+    if: contains(fromJSON('["loop:needs-answer","loop:in-review","loop:needs-human"]'), github.event.label.name)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mention approver
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          LABEL: ${{ github.event.label.name }}
+        run: |
+          case "$LABEL" in
+            "loop:needs-answer") MSG="エージェントからの質問に回答してください" ;;
+            "loop:in-review")    MSG="PR ができました。レビューをお願いします（PR リンクは直前のコメント参照）" ;;
+            "loop:needs-human")  MSG="エスカレーション: 人間の介入が必要です（理由は直前のコメント参照）" ;;
+            *)                   MSG="状態が変わりました" ;;
+          esac
+          gh issue comment "$NUMBER" --repo "$REPO" --body "@koboriakira ${MSG} [${LABEL}]"
+
+      - name: Discord notification
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_LOOP_WEBHOOK }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          LABEL: ${{ github.event.label.name }}
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          case "$LABEL" in
+            "loop:needs-answer") EMOJI="❓" ;;
+            "loop:in-review")    EMOJI="👀" ;;
+            "loop:needs-human")  EMOJI="🚨" ;;
+            *)                   EMOJI="🔔" ;;
+          esac
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"${EMOJI} **[${REPO}#${NUMBER}]** ${TITLE} → \`${LABEL}\`\nhttps://github.com/${REPO}/issues/${NUMBER}\"}" \
+            "$WEBHOOK_URL"
